@@ -40,6 +40,23 @@ try:
 
     TEXTUAL_AVAILABLE = True
 except ImportError:
+    App = None
+    ComposeResult = None
+    Container = None
+    Vertical = None
+    Header = None
+    Footer = None
+    Binding = None
+    DirectoryTree = None
+    TextLog = None
+    Input = None
+    Button = None
+    DataTable = None
+    Tabs = None
+    TabPane = None
+    Progress = None
+    Static = None
+    Label = None
     TEXTUAL_AVAILABLE = False
 
 from esp32_manager.core.project_manager import ProjectManager
@@ -688,7 +705,6 @@ class InteractiveCLI:
 
         self.console.print(help_table)
 
-
 def launch_tui(project_manager: ProjectManager):
     """Launch the TUI application."""
     if not TEXTUAL_AVAILABLE:
@@ -700,6 +716,7 @@ def launch_tui(project_manager: ProjectManager):
     app = ESP32TUIApp(project_manager)
     app.run()
     return True
+
 
 
 def launch_cli(project_manager: ProjectManager):

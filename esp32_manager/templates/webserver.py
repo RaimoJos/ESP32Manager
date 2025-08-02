@@ -1,0 +1,2 @@
+class WebServerTemplate:
+    pass
