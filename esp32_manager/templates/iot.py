@@ -2,7 +2,7 @@ from typing import Dict
 from . import BaseTemplate
 
 class IoTTemplate(BaseTemplate):
-    """IoT project template with WiFi, .MQTT, sensors, and web server."""
+    """IoT project template with Wi-Fi, .MQTT, sensors, and web server."""
 
     description = "Complete IoT solution with WiFi connectivity, MQTT communication, sensor readings, and web interface"
     author = "ESP32Manager"
@@ -296,3 +296,27 @@ class IoTTemplate(BaseTemplate):
 
     def _generate_sensor_manager(self) -> bool:
         """Generate IoT sensor_manager.py file."""
+
+    def _generate_data_logger(self) -> bool:
+        """Generate IoT data_logger.py file."""
+
+    def _generate_utils(self) -> bool:
+        """Generate IoT utils.py file."""
+
+    def _generate_tests(self) -> bool:
+        """Generate IoT test_iot.py file."""
+
+    def _generate_api_docs(self) -> bool:
+        """Generate IoT API.md file."""
+
+    def _generate_web_interface(self) -> bool:
+        """Generate IoT index.html file."""
+
+    def _generate_web_styles(self) -> bool:
+        """Generate IoT styles.css file."""
+
+    def _generate_web_scripts(self) -> bool:
+        """Generate IoT scripts.js file."""
+
+    def _generate_default_config(self) -> bool:
+        """Generate IoT default config.json file."""

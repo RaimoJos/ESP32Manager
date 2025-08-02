@@ -28,7 +28,7 @@ class ProjectConfig:
     last_deployed: str = ""
     git_repo: Optional[str] = None
 
-    def __post__init__(self):
+    def __post_init__(self):
         if self.dependencies is None:
             self.dependencies = []
         if self.build_config is None:
