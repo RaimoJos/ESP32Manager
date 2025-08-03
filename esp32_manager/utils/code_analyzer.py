@@ -10,7 +10,15 @@ from pathlib import Path
 from typing import Iterable, List
 import ast
 
-from Tools.scripts.patchcheck import EXCLUDE_DIRS
+EXCLUDE_DIRS = {
+    "venv",
+    ".venv",
+    "build",
+    "dist",
+    "__pycache__",
+    ".git",
+    ".hg",
+}
 
 # Modules that are known to be unavailable or only partially supported in
 # MicroPython. Importing them is likely to cause runtime failures on the
@@ -25,9 +33,6 @@ FORBIDDEN_IMPORTS = {
 # Maximum allowed line length. MicroPython targets often have limited screen
 # real estate, so we keep this conservative.
 MAX_LINE_LENGTH = 88
-
-# Directories that should not be scanned when walking a project tree.
-EXCLUDED_DIRS = {"venv", ".venv", "build", "dist", "__pycache__"}
 
 def _analyze_file(path: Path) -> List[str]:
     """Analyze a single Python file and return a list of warnings.
@@ -50,7 +55,7 @@ def _analyze_file(path: Path) -> List[str]:
     for lineno, line in enumerate(text.splitlines(), start=1):
         if len(line) > MAX_LINE_LENGTH:
             warnings.append(
-                f"{path}:{lineno} Line too long ({len(line)} > {MAX_LINE_LENGTH}"
+                f"{path}:{lineno} Line too long ({len(line)} > {MAX_LINE_LENGTH})"
             )
 
         # Parse AST to inspect imports
@@ -71,9 +76,10 @@ def _analyze_file(path: Path) -> List[str]:
             for module in modules:
                 if module in FORBIDDEN_IMPORTS:
                     warnings.append(
-                        f"{path}:{node.lineno} Forbidden import: {module}"
+                        f"{path}:{node.lineno} Forbidden import '{module}'"
                     )
-                return warnings
+
+        return warnings
 
 def analyze_project(path: Path) -> List[str]:
     """Analyze all Python files under ``path`` for MicroPython compatibility.
@@ -91,7 +97,7 @@ def analyze_project(path: Path) -> List[str]:
 
     results: List[str] = []
     for file_path in path.rglob("*.py"):
-        if any(part in EXCLUDED_DIRS for part in file_path.parts):
+        if any(part in EXCLUDE_DIRS for part in file_path.parts):
             continue
         results.extend(_analyze_file(file_path))
     return results
