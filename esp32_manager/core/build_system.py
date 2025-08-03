@@ -6,17 +6,14 @@ Handles building, optimizing, and preparing ESP32 projects for deployment.
 Supports code optimization, dependency management, and cross-compilation.
 """
 
-import os
 import ast
 import shutil
 import subprocess
-import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Any, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 import json
-import hashlib
 
 from esp32_manager.core.config_manager import ProjectConfig
 from esp32_manager.utils.exceptions import ProjectValidationError
@@ -48,6 +45,8 @@ class BuildConfig:
     target_platform: str = "esp32"
     python_version: str = "3.4"  # MicroPython compatibility
     output_format: str = "directory"  # directory, zip, tar
+    mpy_cross_path: str = " mpy-cross"
+    mpy_cross_flags: List[str] = field(default_factory=list)
 
 class DependencyResolver:
     """Resolves and manages project dependencies."""
@@ -516,27 +515,26 @@ class BuildSystem:
         return total_size
 
     def _cross_compile_project(self, build_dir: Path, build_config: BuildConfig):
-        """Cross-compile Python files to bytecode."""
+        """Cross-compile Python files using mpy-cross if available."""
         logger.info("Cross-compiling to bytecode...")
 
-        # Find Python files
         python_files = list(build_dir.rglob("*.py"))
 
         for py_file in python_files:
+            mpy_file = py_file.with_suffix('.mpy')
             try:
-                # Compile to bytecode
-                import py_compile
-                pyc_file = py_file.with_suffix('.pyc')
-                py_compile.compile(py_file, pyc_file, doraise=True)
+                cmd = [build_config.mpy_cross_path, *build_config.mpy_cross_flags,
+                       '-o', str(mpy_file), str(py_file)]
+                subprocess.run(cmd, check=True)
 
-                # Optionally remove source file
                 if build_config.minify_code:
                     py_file.unlink()
 
-                logger.debug(f"Compiled {py_file.name} to bytecode")
+                logger.debug(f"Compiled {py_file.name} to {mpy_file.name}")
 
             except Exception as e:
-                logger.warning(f"Failed to compile {py_file}: {e}")
+                logger.warning(f"Failed to cross-compile {py_file}: {e}. Copying source file.")
+                shutil.copy2(py_file, mpy_file)
 
     def _package_build(self, build_dir: Path, build_config: BuildConfig):
         """Package build output."""

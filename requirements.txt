@@ -1,2 +1,4 @@
 rich~=14.1.0
 textual~=5.2.0
+fastapi~=0.110.0
+uvicorn~=0.27

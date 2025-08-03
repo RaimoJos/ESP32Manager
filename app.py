@@ -1,5 +1,6 @@
 import argparse
 import logging
+from asyncio import set_event_loop
 from pathlib import Path
 from typing import Optional
 
@@ -627,26 +628,18 @@ class ESP32ManagerApp:
 
                 print(f"📟 Monitoring {port} (Ctrl+C to stop)")
 
-                import threading
-                stop_event = threading.Event()
-
                 def output_callback(text):
                     print(text, end='')
 
                 try:
-                    monitor_thread = threading.Thread(
-                        target=self.device_manager.monitor_device,
-                        args=(port, output_callback, stop_event),
-                        daemon=True
-                    )
-                    monitor_thread.start()
+                    self.device_manager.start_monitor(port, callback=output_callback)
 
                     while True:
                         import time
                         time.sleep(0.1)
 
                 except KeyboardInterrupt:
-                    stop_event.set()
+                    self.device_manager.stop_monitor(port)
                     print("\n📟 Monitoring stopped")
 
             elif action == 'reset':
@@ -832,10 +825,14 @@ Utilities:
     def run_web(self, host: str = "127.0.0.1", port: int = 8000) -> bool:
         """Run web interface."""
         try:
-            print(f"🌐 Starting web interface at http://{host}:{port}")
-            print("⚠️  Web interface not yet implemented")
-            print("💡 Use 'interactive' mode for now")
-            return False
+            from esp32_manager.interfaces.web_app import create_app
+            import uvicorn
+
+            fastapi_app = create_app(
+                self.project_manager,  self.build_manager, self.device_manager
+            )
+            uvicorn.run(fastapi_app, host=host, port=port)
+            return True
         except Exception as e:
             self.logger.error(f"Web interface failed: {e}")
             return False

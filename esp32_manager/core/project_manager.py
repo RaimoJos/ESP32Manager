@@ -1,11 +1,15 @@
 import json
 import shutil
+import importlib
+import inspect
+import pkgutil
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, Callable, List, Any
 
 from esp32_manager.core.config_manager import ProjectConfig, logger
 from esp32_manager.utils.exceptions import ProjectValidationError
+from esp32_manager.plugins.base_plugin import BasePlugin
 
 
 class ProjectManager:
@@ -17,7 +21,10 @@ class ProjectManager:
         self.current_project: Optional[str] = None
         self._observers: List[Callable[[str, ProjectConfig], None]] = []
 
+        self.plugins: Dict[str, BasePlugin] = {}
+
         self.load_projects()
+        self.load_plugins()
 
     def add_observer(self, callback: Callable[[str, ProjectConfig], None]):
         """Add observer for project changes."""
@@ -52,6 +59,53 @@ class ProjectManager:
         except Exception as e:
             logger.error(f"Failed to load projects: {e}")
             return False
+
+    def load_plugins(self) -> None:
+        """Discover and load available plugins.
+
+        Plugins are discovered by scanning the :mod:`esp32_manager.plugins`
+        package for subclasses of :class:`BasePlugin`. Each plugin is
+        instantiated with this project manager instance and its
+        :meth:`load` hook is invoked.
+        """
+        try:
+            import esp32_manager.plugins as plugins_pkg
+        except Exception as exc: # pragma: no cover - very unlikely
+            logger.error(f"Unable to import plugins package: {exc}")
+            return
+        for _, module_name, _ in pkgutil.iter_modules(plugins_pkg.__path__):
+            if module_name.startswith('_') or module_name == 'base_plugin':
+                continue
+            try:
+                module = importlib.import_module(f'esp32_manager.plugins.{module_name}')
+            except Exception as exc:
+                logger.error(f"Failed to import plugin '{module_name}': {exc}")
+                continue
+
+            for obj in module.__dict__.values():
+                if inspect.isclass(obj) and issubclass(obj, BasePlugin) and obj is not BasePlugin:
+                    try:
+                        plugin = obj(self)
+                        plugin.load()
+                    except Exception as exc:
+                        logger.error(f"Failed to initialize plugin '{obj.__name__}': {exc}")
+                        continue
+                    self.plugins[plugin.name] = plugin
+
+    def get_plugin(self, name: str) -> Optional[BasePlugin]:
+        """Return the loaded plugin with *name* if available."""
+        return self.plugins.get(name)
+
+    def run_plugin(self, name: str, command: str, **kwargs: Any ) -> Any:
+        """Execute *command* using the plugin *name*.
+
+         The plugin's :meth:`BasePlugin.execute` method is called with the
+         provided command and keyword arguments. Raise :class:`ValueError`
+        if the plugin is not loaded."""
+        plugin = self.get_plugin(name)
+        if not plugin:
+            raise ValueError(f"Plugin '{name}' not found")
+        return plugin.execute(command, **kwargs)
 
     def save_projects(self) -> bool:
         """Save project configuration to file."""
@@ -323,9 +377,77 @@ class ProjectManager:
 
     def import_project(self, archive_path: Path, name: Optional[str] = None) -> Optional[ProjectConfig]:
         """Import project from archive."""
-        # Implementation for importing projects
-        # This would extract archive and create project config
-        pass
+        archive_path = Path(archive_path)
+
+        if not archive_path.exists():
+            logger.error(f"Archive not found: {archive_path}")
+            return None
+
+        if archive_path.suffix.lower() != '.zip':
+            logger.error("Only .zip archives are supported for import")
+            return
+
+        try:
+            # Extract to temporary directory first
+            from tempfile import TemporaryDirectory
+
+            with TemporaryDirectory(dir=self.workspace_dir) as tmp_dir:
+                shutil.unpack_archive(str(archive_path), tmp_dir, 'zip')
+
+                tmp_path = Path(tmp_dir)
+
+                # Handle archives that contain a single root directory
+                entries = list(tmp_path.iterdir())
+                if len(entries) == 1 and entries[0].is_dir():
+                    project_root = entries[0]
+                else:
+                    project_root = tmp_path
+
+                project_json = project_root / 'project.json'
+
+                if project_json.exists():
+                    with open(project_json, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+
+                    proj_name = name or data.get('name') or archive_path.stem
+                    self.validate_project_name(proj_name)
+
+                    # Ensure path and name match the final location
+                    data['name'] = proj_name
+                    data['path'] = str(self.workspace_dir / proj_name)
+                    config = ProjectConfig.from_dict(data)
+                else:
+                    proj_name = name or archive_path.stem
+                    self.validate_project_name(proj_name)
+                    config = ProjectConfig(name=proj_name, path=self.workspace_dir / proj_name)
+
+                final_path = self.workspace_dir / proj_name
+                if final_path.exists():
+                    raise ProjectValidationError(f"Destination path {final_path} already exists")
+
+                shutil.move(str(project_root), str(final_path))
+
+                # Write project.json if it didn't exist
+                if not (final_path / 'project.json').exists():
+                    with open(final_path / 'project.json', 'w', encoding='utf-8') as f:
+                        json.dump(config.to_dict(), f, indent=2)
+        except Exception as e:
+            logger.error(f"Failed to import project: {e}")
+            return None
+
+        # Register project
+        self.projects[proj_name] = config
+
+        # Set as current if no project is currently selected
+        if not self.current_project:
+            self.current_project = proj_name
+
+        if self.save_projects():
+            self._notify_observers('project_imported', config)
+            logger.info(f"Imported project '{proj_name}' from {archive_path}")
+            return config
+
+        return None
 
     def get_workspace_stats(self) -> Dict[str, Any]:
         """Get overall workspace statistics."""

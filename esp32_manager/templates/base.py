@@ -1,8 +1,5 @@
 from typing import List, Dict
 
-from pyexpat import features
-
-
 class BaseTemplate:
     """Base class for all project templates."""
 
@@ -86,7 +83,7 @@ This project is licensed under the MIT License.
         if not self.features:
             return "- Basic ESP32 functionality"
 
-        return "\n".join(f"- {features}" for feature in self.features)
+        return "\n".join(f"- {feature}" for feature in self.features)
 
     @staticmethod
     def _generate_gitignore() -> str:

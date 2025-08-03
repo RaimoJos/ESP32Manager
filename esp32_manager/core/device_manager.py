@@ -21,6 +21,8 @@ import logging
 import json
 import hashlib
 
+from ..utils.serial_monitor import SerialMonitor
+
 logger = logging.getLogger(__name__)
 
 class DeviceState(Enum):
@@ -422,6 +424,7 @@ class ESP32DeviceManager:
         self.workspace_dir = workspace_dir
         self.devices: Dict[str, DeviceInfo] = {}
         self.connections: Dict[str, SerialConnection] = {}
+        self.serial_monitors: Dict[str, SerialMonitor] = {}
         self.detector = DeviceDetector()
         self._scan_thread: Optional[threading.Thread] = None
         self._scanning = False
@@ -550,6 +553,29 @@ class ESP32DeviceManager:
         if port in self.devices:
             self.devices[port].state = DeviceState.DISCONNECTED
             self._notify_observers('device_disconnected', self.devices[port])
+
+    def start_monitor(self, port: str,
+                      callback: Optional[Callable[[str], None]] = None,
+                      log_file: Optional[Path] = None) -> bool:
+        """Start monitoring serial output from a device."""
+        if not self.connect_device(port):
+            logger.error(f"Failed to connect to device {port}")
+            return False
+
+        if port in self.serial_monitors:
+            return True
+
+        connection = self.connections[port]
+        monitor = SerialMonitor(connection, callback=callback, log_file=log_file)
+        monitor.start()
+        self.serial_monitors[port] = monitor
+        return True
+
+    def stop_monitor(self, port: str) -> None:
+        """Stop monitoring serial output for a device."""
+        monitor = self.serial_monitors.pop(port, None)
+        if monitor:
+            monitor.stop()
 
     def get_connection(self, port: str) -> Optional[SerialConnection]:
         """Get connection for a device."""
@@ -781,27 +807,6 @@ class ESP32DeviceManager:
             logger.error(f"Failed to get device info: {e}")
             return None
 
-    def monitor_device(self, port: str, callback: Callable[[str], None],
-                      stop_event: threading.Event):
-        """Monitor device output."""
-        if not self.connect_device(port):
-            logger.error(f"Failed to connect to device {port}")
-            return
-
-        connection = self.connections[port]
-
-        try:
-            while not stop_event.is_set():
-                if connection.available():
-                    data = connection.read(connection.available())
-                    if data:
-                        text = data.decode('utf-8', errors='ignore')
-                        callback(text)
-                else:
-                    time.sleep(0.01)
-
-        except Exception as e:
-            logger.error(f"Monitor error: {e}")
 
     def send_command(self, port: str, command: str) -> bool:
         """Send command to device."""
@@ -872,6 +877,8 @@ class ESP32DeviceManager:
     def cleanup(self):
         """Clean up resources."""
         self.stop_scanning()
+        for port in list(self.serial_monitors.keys()):
+            self.stop_monitor(port)
 
         # Disconnect all devices
         for port in list(self.connections.keys()):
@@ -940,21 +947,14 @@ if __name__ == "__main__":
             print(text, end='')
 
         manager = ESP32DeviceManager(Path("."))
-        stop_event = threading.Event()
 
         try:
-            monitor_thread = threading.Thread(
-                target=manager.monitor_device,
-                args=(args.monitor, output_callback, stop_event),
-                daemon=True
-            )
-            monitor_thread.start()
-
+            manager.start_monitor(args.monitor, callback=output_callback)
             while True:
                 time.sleep(0.1)
 
         except KeyboardInterrupt:
-            stop_event.set()
+            manager.start_monitor(args.monitor)
             print("\nMonitoring stopped")
         finally:
             manager.cleanup()
