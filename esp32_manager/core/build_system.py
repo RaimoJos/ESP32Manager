@@ -667,7 +667,7 @@ class BuildManager:
         return self.build_system.build_project(project_config, build_config)
 
     def get_build_status(self, project_name: str) -> Dict[str, Any]:
-        """Get last build timestamp, errors and warnings for a project."""
+        """Get last build timestamp, and status information for a project."""
         build_dir = self.build_system.build_dir / project_name
 
         if not build_dir.exists():
@@ -675,8 +675,8 @@ class BuildManager:
                 "built": False,
                 "build_time": None,
                 "last_success": None,
-                "last_warning": None,
-                "last_error": None
+                "errors": [],
+                "warnings": []
             }
 
         metadata_file = build_dir / "build_metadata.json"
@@ -684,19 +684,27 @@ class BuildManager:
             try:
                 with open(metadata_file, 'r', encoding='utf-8') as f:
                     metadata = json.load(f)
+                timestamp = metadata["build"]["timestamp"]
                 return {
                     "built": True,
-                    "build_time": metadata["build"]["timestamp"],
+                    "build_time": timestamp,
                     "config": metadata["build"]["config"],
                     "file_count": len(metadata["files"]),
                     "dependencies": metadata["dependencies"],
-                    "last_success": metadata["build"].get("errors", []),
-                    "last_warning": metadata['build'].get("warnings", [])
+                    "last_success": timestamp,
+                    "errors": metadata["build"].get("errors", []),
+                    "warnings": metadata['build'].get("warnings", [])
                 }
             except Exception as e:
                 logger.warning(f"Failed to read build metadata: {e}")
 
-        return {"built": True, "build_time": None, "last_success": None, "last_warning": [], "last_error": []}
+        return {
+            "built": False,
+            "build_time": None,
+            "last_success": None,
+            "errors": [],
+            "warnings": []
+        }
 
 # Utility functions
 def create_default_build_configs() -> Dict[str, BuildConfig]:

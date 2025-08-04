@@ -10,6 +10,7 @@ function renderProjects(list) {
             <td>${proj.name}</td>
             <td>${proj.template}</td>
             <td>${proj.description || ''}</td>
+            <td>${proj}.last_success || ''}</td>
             <td>
                 <button onclick="showDetails('${proj.name}')">Details</button>
                 <button onclick="deleteProject('${proj.name}')">Delete</button>
@@ -18,6 +19,13 @@ function renderProjects(list) {
         `;
         tbody.appendChild(tr);
     });
+}
+
+function showTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(sec => sec.classList.remove('active'));
+    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`${tab}-section`).classList.add('active');
+    document.querySelector(`.tab-button[data-tab="${tab}"]`).classList.add('active');
 }
 
 async function loadProjects() {
@@ -39,6 +47,11 @@ async function loadDevices() {
             <td>${dev.port}</td>
             <td>${dev.name}</td>
             <td>${dev.state}</td>
+            <td>
+                <button onclick="showDeviceInfo('${dev.port}')">Info</button>
+                <button onclick="listDeviceFiles('${dev.port}')">Files</button>
+                <button onclick="simulateDevice('${dev.port}')">Simulate</button>
+            </td>
         `;
         tbody.appendChild(tr);
     });
@@ -118,12 +131,24 @@ async function deployProject(name, port) {
     await loadDevices(); // refresh device status
 }
 
+function showDeviceInfo(port) {
+    appendLog(`Info for ${port} not implemented`);
+}
+
+function listDeviceFiles(port) {
+    appendLog(`File listing for ${port} not implemented`);
+}
+
+function simulateDevice(port) {
+    appendLog(`Simulation for ${port} not implemented`);
+}
 
 document.getElementById('create-project-form').addEventListener('submit', createProject);
 
 window.addEventListener('DOMContentLoaded', async () => {
     await loadProjects();
     await loadDevices();
+    showTab('project');
 });
 
 document.getElementById('project-search').addEventListener('input', () => {
@@ -133,6 +158,10 @@ document.getElementById('project-search').addEventListener('input', () => {
         (p.description && p.description.toLowerCase().includes(query))
     );
     renderProjects(filtered);
+});
+
+document.querySelectorAll('.tab-button').forEach(btn => {
+    btn.addEventListener('click', () => showTab(btn.dataset.tab));
 });
 
 // Subscribe to real-time events
@@ -158,6 +187,11 @@ evtSource.onmessage = function(e) {
             <td>${dev.port}</td>
             <td>${dev.name}</td>
             <td>${dev.state}</td>
+            <td>
+                <button onclick="showDeviceInfo('${dev.port}')">Info</button>
+                <button onclick="listDeviceFiles('${dev.port}')">Files</button>
+                <button onclick="simulateDevice('${dev.port}')">Simulate</button>
+            </td>
         `;
         tbody.appendChild(tr);
     });

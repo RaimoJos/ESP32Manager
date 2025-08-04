@@ -1,6 +1,5 @@
 import argparse
 import logging
-from asyncio import set_event_loop
 from pathlib import Path
 from typing import Optional
 

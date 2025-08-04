@@ -1,7 +1,7 @@
 import asyncio
 import json
+from datetime import datetime
 from pathlib import Path
-import pygments.token
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -45,10 +45,21 @@ def create_app(
     @app.get("/api/events")
     async def stream_events():
         """SSE endpoint that pushes the full projects and devices lists every 5 seconds."""
+
         async def event_generator():
             while True:
+                projects = []
+                for p in project_manager.list_projects():
+                    status = build_manager.get_build_status(p.name)
+                    last_success = status.get("last_success")
+                    if last_success:
+                        last_success = datetime.fromtimestamp(last_success).isoformat()
+                    proj = p.to_dict()
+                    proj["last_success"] = last_success
+                    projects.append(proj)
+
                 data = {
-                    "projects": [p.to_dict() for p in project_manager.list_projects()],
+                    "projects": projects,
                     "devives": [d.to_dict() for d in device_manager.get_devices()]
                 }
                 yield f"data: {json.dumps(data)}\n\n"
@@ -59,7 +70,16 @@ def create_app(
     @app.get("/api/projects")
     async def get_projects():
         """API endpoint to list projects."""
-        return {"projects": [p.to_dict() for p in project_manager.list_projects()]}
+        projects = []
+        for p in project_manager.list_projects():
+            status = build_manager.get_build_status(p.name)
+            last_success = status.get("last_success")
+            if last_success:
+                last_success = datetime.fromtimestamp(last_success).isoformat()
+            proj = p.to_dict()
+            proj["last_success"] = last_success
+            projects.append(proj)
+        return {"projects": projects}
 
     @app.post("/api/projects")
     async def create_project(request: Request):
@@ -82,7 +102,7 @@ def create_app(
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @app.post("/api/projects/{project_name}")
+    @app.delete("/api/projects/{project_name}")
     async def delete_project(project_name: str, request: Request):
         """Delete an existing project. Optional body: {'remove_file': True}."""
         try:
@@ -149,13 +169,16 @@ def create_app(
 
         stats = project_manager.get_project_stats(project_name)
         build_status = build_manager.get_build_status(project_name)
+        last_success = build_status.get("last_success")
+        if last_success:
+            last_success = datetime.fromtimestamp(last_success).isoformat()
         return {
             "project": project.to_dict(),
             "stats": stats,
             "build_status": {
-                "last_success": build_status.last_success.isoformat() if build_status.last_success else None,
-                "last_error": build_status.errors,
-                "last_warnings": build_status.warnings
+                "last_success": last_success,
+                "last_errors": build_status.get("errors", []),
+                "last_warnings": build_status.get("warnings", []),
             }
         }
 
