@@ -40,6 +40,26 @@
     <h2>Logs</h2>
     <pre id="logs"></pre>
     </section>
+
+    <!-- Project Details Modal -->
+    <div id="project-modal" class="modal hidden">
+      <div class="modal-content">
+        <span id="modal-close" class="modal-close">&times;</span>
+        <h3 id="modal-title"></h3>
+        <div id="modal-body">
+          <!-- Filled by JS -->
+          <p><strong>Description:</strong> <span id="modal-desc"></span></p>
+          <p><strong>Files:</strong> <span id="modal-files"></span></p>
+          <p><strong>Python files:</strong> <span id="modal-pyfiles"></span></p>
+          <p><strong>Size:</strong> <span id="modal-size"></span> bytes</p>
+          <p><strong>Last built:</strong> <span id="modal-last-built"></span></p>
+          <p><strong>Last errors:</strong> <pre id="modal-errors"></pre></p>
+          <p><strong>Last warnings:</strong> <pre id="modal-warnings"></pre></p>
+        </div>
+      </div>
+    </div>
+
     <script src="static/js/script.js"></script>
+
 </body>
 </html>

@@ -5,7 +5,8 @@ ESP32 Build System
 Handles building, optimizing, and preparing ESP32 projects for deployment.
 Supports code optimization, dependency management, and cross-compilation.
 """
-
+from __future__ import annotations
+import time
 import ast
 import shutil
 import subprocess
@@ -19,6 +20,20 @@ from esp32_manager.core.config_manager import ProjectConfig
 from esp32_manager.utils.exceptions import ProjectValidationError
 
 logger = logging.getLogger(__name__)
+
+def _is_string_node(self, node):
+    """Check if node is a string literal (compatible with all Python versions)."""
+    if hasattr(ast, 'Constant'):  # Python 3.8+
+        return isinstance(node, ast.Constant) and isinstance(node.value, str)
+    else:  # Python < 3.8
+        return isinstance(node, ast.Str)
+
+def visit_FunctionDef(self, node):
+    if (node.body and isinstance(node.body[0], ast.Expr) and
+        self._is_string_node(node.body[0].value)):
+        node.body = node.body[1:]
+    return self.generic_visit(node)
+
 
 @dataclass
 class BuildResult:
@@ -45,8 +60,31 @@ class BuildConfig:
     target_platform: str = "esp32"
     python_version: str = "3.4"  # MicroPython compatibility
     output_format: str = "directory"  # directory, zip, tar
-    mpy_cross_path: str = " mpy-cross"
+    mpy_cross_path: str = "mpy-cross"
     mpy_cross_flags: List[str] = field(default_factory=list)
+
+
+
+def _get_cache_key(self, project_config: ProjectConfig, build_config: BuildConfig) -> str:
+    """Generate cache key for build."""
+    import hashlib
+
+    # Include project files modification times
+    file_times = []
+    src_dir = project_config.path / "src"
+    if src_dir.exists():
+        for file_path in src_dir.rglob("*.py"):
+            file_times.append(str(file_path.stat().st_mtime))
+
+    cache_data = {
+        'project_name': project_config.name,
+        'project_version': project_config.version,
+        'build_config': build_config.__dict__,
+        'file_times': sorted(file_times)
+    }
+
+    cache_str = json.dumps(cache_data, sort_keys=True)
+    return hashlib.md5(cache_str.encode()).hexdigest()
 
 class DependencyResolver:
     """Resolves and manages project dependencies."""
@@ -96,9 +134,12 @@ class DependencyResolver:
                 elif isinstance(node, ast.ImportFrom):
                     if node.module:
                         imports.add(node.module.split('.')[0])
-
-        except Exception as e:
+        except  (SyntaxError, UnicodeDecodeError) as e:
             logger.warning(f"Failed to parse {file_path}: {e}")
+        except FileNotFoundError:
+            logger.error(f"File not found: {file_path}")
+        except PermissionError:
+            logger.error(f"Permission denied reading {file_path}")
 
         return imports
 
@@ -108,7 +149,22 @@ class DependencyResolver:
         valid_deps = dependencies & available
         invalid_deps = dependencies - available
 
-        return valid_deps, invalid_deps
+        # Check for common typos/alternatives
+        suggested_deps = self._suggest_alternatives(invalid_deps)
+
+        return valid_deps, invalid_deps, suggested_deps
+
+    def _suggest_alternatives(self, invalid_deps: Set[str]) -> Dict[str, str]:
+        """Suggest alternative for invalid dependencies."""
+        suggestions = {
+            'collections': 'ucollections',
+            'json': 'ujson',
+            'os': 'uos',
+            're': 'ure',
+            'socket': 'usocket',
+            'time': 'utime',
+        }
+        return {dep: suggestions.get(dep) for dep in invalid_deps if dep in suggestions}
 
 class CodeOptimizer:
     """Optimizes Python code for MicroPython/ESP32 deployment."""
@@ -215,7 +271,7 @@ class CodeOptimizer:
         class DocstringRemover(ast.NodeTransformer):
             def visit_FunctionDef(self, node):
                 if (node.body and isinstance(node.body[0], ast.Expr) and
-                    isinstance(node.body[0].value, ast.Str)):
+                    isinstance(node.body[0].value, ast.Constant)):
                     node.body = node.body[1:]
                 return self.generic_visit(node)
 
@@ -432,6 +488,7 @@ class BuildSystem:
         """Process source directory with optimizations."""
         optimizer = CodeOptimizer(build_config)
         total_savings = 0
+        failed_files = []
 
         for source_file in src_dir.rglob("*"):
             if source_file.is_file():
@@ -446,6 +503,8 @@ class BuildSystem:
                     # Copy other files as-is
                     target_file.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(source_file, target_file)
+        if failed_files:
+            logger.warning(f"Failed to process {len(failed_files)} files: {failed_files}")
 
         return total_savings
 
@@ -453,7 +512,6 @@ class BuildSystem:
                                 build_config: BuildConfig, valid_deps: Set[str],
                                 invalid_deps: Set[str]):
         """Generate build metadata file."""
-        import time
 
         metadata = {
             "project": {
@@ -609,11 +667,17 @@ class BuildManager:
         return self.build_system.build_project(project_config, build_config)
 
     def get_build_status(self, project_name: str) -> Dict[str, Any]:
-        """Get build status for a project."""
+        """Get last build timestamp, errors and warnings for a project."""
         build_dir = self.build_system.build_dir / project_name
 
         if not build_dir.exists():
-            return {"built": False, "build_time": None}
+            return {
+                "built": False,
+                "build_time": None,
+                "last_success": None,
+                "last_warning": None,
+                "last_error": None
+            }
 
         metadata_file = build_dir / "build_metadata.json"
         if metadata_file.exists():
@@ -625,12 +689,14 @@ class BuildManager:
                     "build_time": metadata["build"]["timestamp"],
                     "config": metadata["build"]["config"],
                     "file_count": len(metadata["files"]),
-                    "dependencies": metadata["dependencies"]
+                    "dependencies": metadata["dependencies"],
+                    "last_success": metadata["build"].get("errors", []),
+                    "last_warning": metadata['build'].get("warnings", [])
                 }
             except Exception as e:
                 logger.warning(f"Failed to read build metadata: {e}")
 
-        return {"built": True, "build_time": None}
+        return {"built": True, "build_time": None, "last_success": None, "last_warning": [], "last_error": []}
 
 # Utility functions
 def create_default_build_configs() -> Dict[str, BuildConfig]:
@@ -666,8 +732,27 @@ def create_default_build_configs() -> Dict[str, BuildConfig]:
         )
     }
 
-# Import time module for build system
-import time
+
+def validate_build_config(self, config: BuildConfig) -> List[str]:
+    """Validate build configuration."""
+    warnings = []
+
+    # Check mpy-cross availability
+    if config.cross_compile:
+        try:
+            result = subprocess.run([config.mpy_cross_path, '--version'],
+                                    capture_output=True, text=True, timeout=5)
+            if result.returncode != 0:
+                warnings.append(f"mpy-cross not available at {config.mpy_cross_path}")
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            warnings.append("mpy-cross not found, cross-compilation will be skipped")
+
+    # Validate target platform
+    valid_platforms = {'esp32', 'esp8266', 'rp2040'}
+    if config.target_platform not in valid_platforms:
+        warnings.append(f"Unknown target platform: {config.target_platform}")
+
+    return warnings
 
 if __name__ == "__main__":
     # Example usage

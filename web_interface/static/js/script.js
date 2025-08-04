@@ -11,7 +11,7 @@ function renderProjects(list) {
             <td>${proj.template}</td>
             <td>${proj.description || ''}</td>
             <td>
-                <button onclick="buildProject('${proj.name}')">Build</button>
+                <button onclick="showDetails('${proj.name}')">Details</button>
                 <button onclick="deleteProject('${proj.name}')">Delete</button>
                 <button onclick="deployPrompt('${proj.name}')">Deploy</button>
             </td>
@@ -134,3 +134,73 @@ document.getElementById('project-search').addEventListener('input', () => {
     );
     renderProjects(filtered);
 });
+
+// Subscribe to real-time events
+const evtSource = new EventSource('/api/events');
+evtSource.onmessage = function(e) {
+    const data = JSON.parse(e.data);
+
+    // Update projects table
+    projectList = data.projects;
+    const query = document.getElementById('project-search').value.toLowerCase();
+    const filtered = projectList.filter(p =>
+        p.name.toLowerCase().includes(query) ||
+        (p.description && p.description.toLowerCase().includes(query))
+    );
+    renderProjects(filtered);
+
+    // Update devices table
+    const tbody = document.querySelector('#devices-table tbody');
+    tbody.innerHTML = '';
+    data.devices.forEach(dev => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${dev.port}</td>
+            <td>${dev.name}</td>
+            <td>${dev.state}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    appendLog(`🔄 Received update: ${data.projects.length} projects, ${data.devices.length} devices`);
+};
+
+evtSource.onerror = function(err) {
+    appendLog('⚠️ SSE connection error');
+    evtSource.close();
+};
+
+// Show project details modal
+async function showDetails(name) {
+    try {
+        const resp = await fetch(`/api/projects/${name}/info`);
+        if (!resp.ok) throw new Error("Not found");
+        const data = await resp.json();
+
+        document.getElementById('modal-title').textContent = data.project.name;
+        document.getElementById('modal-desc').textContent = data.project.description;
+        document.getElementById('modal-files').textContent = data.stats.files;
+        document.getElementById('modal-pyfiles').textContent = data.stats.python_files;
+        document.getElementById('modal-size').textContent = data.stats.size_bytes;
+        document.getElementById('modal-last-built').textContent = data.build_status.last_success || "Never";
+        document.getElementById('modal-errors').textContent = (data.build_status.last_errors || []).join('\n') || "None";
+        document.getElementById('modal-warnings').textContent = (data.build_status.last_warnings || []).join('\n') || "None";
+
+        // Show modal
+        document.getElementById('project-modal').classList.remove('hidden');
+    } catch (err) {
+        appendLog(`⚠️ Could not load details for ${name}`);
+    }
+}
+
+// Close modal when clicking the ×
+document.getElementById('modal-close').onclick = () => {
+    document.getElementById('project-modal').classList.add('hidden');
+};
+
+// Also hide modal when clicking outside the box
+document.getElementById('project-modal').onclick = (e) => {
+    if (e.target.id === 'project-modal') {
+        document.getElementById('project-modal').classList.add('hidden');
+    }
+};

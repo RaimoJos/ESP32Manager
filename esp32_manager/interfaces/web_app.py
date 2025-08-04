@@ -1,9 +1,12 @@
+import asyncio
+import json
 from pathlib import Path
+import pygments.token
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-
+from fastapi.responses import StreamingResponse
 from esp32_manager.core.project_manager import ProjectManager
 from esp32_manager.core.build_system import BuildManager
 from esp32_manager.core.device_manager import ESP32DeviceManager
@@ -38,6 +41,20 @@ def create_app(
                 "devices": devices,
             }
         )
+
+    @app.get("/api/events")
+    async def stream_events():
+        """SSE endpoint that pushes the full projects and devices lists every 5 seconds."""
+        async def event_generator():
+            while True:
+                data = {
+                    "projects": [p.to_dict() for p in project_manager.list_projects()],
+                    "devives": [d.to_dict() for d in device_manager.get_devices()]
+                }
+                yield f"data: {json.dumps(data)}\n\n"
+                await asyncio.sleep(5)
+
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     @app.get("/api/projects")
     async def get_projects():
@@ -121,6 +138,25 @@ def create_app(
             "build_time": result.build_time,
             "warnings": result.errors,
             "errors": result.errors,
+        }
+
+    @app.get("/api/projects/{project_name}/info")
+    async def get_project_info(project_name: str):
+        """Return detailed info and stats for a project."""
+        project = project_manager.get_project(project_name)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        stats = project_manager.get_project_stats(project_name)
+        build_status = build_manager.get_build_status(project_name)
+        return {
+            "project": project.to_dict(),
+            "stats": stats,
+            "build_status": {
+                "last_success": build_status.last_success.isoformat() if build_status.last_success else None,
+                "last_error": build_status.errors,
+                "last_warnings": build_status.warnings
+            }
         }
 
     @app.get("/api/devices")
