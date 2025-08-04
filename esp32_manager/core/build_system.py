@@ -26,7 +26,7 @@ def _is_string_node(self, node):
     if hasattr(ast, 'Constant'):  # Python 3.8+
         return isinstance(node, ast.Constant) and isinstance(node.value, str)
     else:  # Python < 3.8
-        return isinstance(node, ast.Str)
+        return isinstance(node, ast.Constant)
 
 def visit_FunctionDef(self, node):
     if (node.body and isinstance(node.body[0], ast.Expr) and
@@ -417,7 +417,7 @@ class BuildSystem:
             for deps in dependencies.values():
                 all_deps.update(deps)
 
-            valid_deps, invalid_deps = self.dependency_resolver.validate_dependencies(all_deps)
+            valid_deps, invalid_deps, _ = self.dependency_resolver.validate_dependencies(all_deps)
 
             if invalid_deps:
                 warnings.append(f"Unknown dependencies: {', '.join(invalid_deps)}")
