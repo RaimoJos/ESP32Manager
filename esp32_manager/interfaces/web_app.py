@@ -14,7 +14,7 @@ def create_app(
         device_manager: ESP32DeviceManager,
 ) -> FastAPI:
     """Create the FastAPI application for the web interface."""
-    repo_root = Path(__file__).resolve().parent[2]
+    repo_root = Path(__file__).resolve().parents[2]
     static_dir = repo_root / "web_interface" / "static"
     templates_dir = repo_root / "web_interface" / "templates"
 
@@ -44,6 +44,69 @@ def create_app(
         """API endpoint to list projects."""
         return {"projects": [p.to_dict() for p in project_manager.list_projects()]}
 
+    @app.post("/api/projects")
+    async def create_project(request: Request):
+        """Create a new project."""
+        data = await request.json()
+        name = data.get("name")
+        description = data.get("description", "")
+        template = data.get("template", "basic")
+        author = data.get("author", "")
+        if not name:
+            raise HTTPException(status_code=400, detail="Project name is required")
+        try:
+            project = project_manager.create_project(
+                name=name,
+                description=description,
+                template=template,
+                author=author
+            )
+            return {"success": True, "project": project.to_dict()}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @app.post("/api/projects/{project_name}")
+    async def delete_project(project_name: str, request: Request):
+        """Delete an existing project. Optional body: {'remove_file': True}."""
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+        remove_files = bool(data.get("remove_files", False))
+        try:
+            project_manager.delete_project(project_name, remove_files=remove_files)
+            return {"success": True}
+        except Exception as e:
+            raise HTTPException(status_code=404, detail=str(e))
+
+    @app.post("/api/deploy/{project_name}")
+    async def deploy_project_endpoint(project_name: str, request: Request):
+        """Build and deploy a project to an ESP32 device.
+        JSON body must include the 'port' to use."""
+        data = await request.json()
+        port = data.get("port")
+        if not port:
+            raise HTTPException(status_code=400, detail="Device port is required")
+        project = project_manager.get_project(project_name)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        # build the project
+        build_result = build_manager.build_project(project)
+        if not build_result.success:
+            return {
+                "success": False,
+                "errors": build_result.errors,
+                "warnings": build_result.warnings,
+            }
+        # deploy to the device
+        transfer_result = device_manager.deploy_project(build_result.build_path, port)
+        return {
+            "success": transfer_result.success,
+            "files_transferred": transfer_result.files_transferred,
+            "bytes_transferred": transfer_result.bytes_transferred,
+            "transfer_time": transfer_result.transfer_time,
+            "errors": transfer_result.errors,
+        }
     @app.post("/api/build/{project_name}")
     async def build_project(project_name: str):
         """Start a build for the given project."""
@@ -57,6 +120,7 @@ def create_app(
             "total_size": result.total_size,
             "build_time": result.build_time,
             "warnings": result.errors,
+            "errors": result.errors,
         }
 
     @app.get("/api/devices")

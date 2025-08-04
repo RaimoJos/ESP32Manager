@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ESP32 Manager Dashboard</title>
+    <link rel="stylesheet" href="/static/css/styles.css"></head>
+<body>
+    <header>
+        <h1>ESP32 Manager Dashboard</h1>
+    </header>
+    <section id="project-section">
+        <h2>Projects</h2>
+        <form id="create-project-form">
+            <input type="text" id="project-name" placeholder="Project Name" required>
+            <input type="text" id="project-desc" placeholder="Description">
+            <select id="project-template">
+                <option value="basic">Basic</option>
+                <option value="iot">IoT</option>
+            </select>
+            <button type="submit">Create Project</button>
+            <input type="text" id="project-search" placeholder="Search projects">
+
+        </form>
+        <table id="projects-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Template</th>
+                    <th>Description</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Filled by scripts.js -->
+            </tbody>
+        </table>
+
+    </section>
+    <section id="logs-section">
+    <h2>Logs</h2>
+    <pre id="logs"></pre>
+    </section>
+    <script src="static/js/script.js"></script>
+</body>
+</html>

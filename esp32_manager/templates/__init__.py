@@ -5,16 +5,16 @@ import logging
 from esp32_manager.templates.base import BaseTemplate
 from esp32_manager.templates.basic import BasicTemplate
 from esp32_manager.templates.iot import IoTTemplate
-from esp32_manager.templates.sensor import SensorTemplate
-from esp32_manager.templates.webserver import WebServerTemplate
+# from esp32_manager.templates.sensor import SensorTemplate
+# from esp32_manager.templates.webserver import WebServerTemplate
 
 logger = logging.getLogger(__name__)
 
 TEMPLATES = {
     'basic': BasicTemplate,
     'iot': IoTTemplate,
-    'sensor': SensorTemplate,
-    'webserver': WebServerTemplate,
+    # 'sensor': SensorTemplate,
+    # 'webserver': WebServerTemplate,
 }
 
 def get_available_templates() -> List[str]:
