@@ -143,8 +143,12 @@ class DependencyResolver:
 
         return imports
 
-    def validate_dependencies(self, dependencies: Set[str]) -> Tuple[Set[str], Set[str]]:
-        """Validate dependencies against available modules."""
+    def validate_dependencies(self, dependencies: Set[str]) -> Tuple[Set[str], Set[str], Dict[str, str]]:
+        """Validate dependencies against available modules.
+
+        Returns a tuple of sets for valid and invalid dependencies along with a
+        mapping of suggestions for any invalid entries.
+        """
         available = self.micropython_stdlib | self.esp32_modules
         valid_deps = dependencies & available
         invalid_deps = dependencies - available
@@ -277,13 +281,13 @@ class CodeOptimizer:
 
             def visit_ClassDef(self, node):
                 if (node.body and isinstance(node.body[0], ast.Expr) and
-                    isinstance(node.body[0].value, ast.Str)):
+                    isinstance(node.body[0].value, ast.Constant)):
                     node.body = node.body[1:]
                 return self.generic_visit(node)
 
             def visit_Module(self, node):
                 if (node.body and isinstance(node.body[0], ast.Expr) and
-                    isinstance(node.body[0].value, ast.Str)):
+                    isinstance(node.body[0].value, ast.Constant)):
                     node.body = node.body[1:]
                 return self.generic_visit(node)
 
@@ -417,14 +421,24 @@ class BuildSystem:
             for deps in dependencies.values():
                 all_deps.update(deps)
 
-            valid_deps, invalid_deps, _ = self.dependency_resolver.validate_dependencies(all_deps)
+            valid_deps, invalid_deps, suggested_deps = self.dependency_resolver.validate_dependencies(all_deps)
 
             if invalid_deps:
-                warnings.append(f"Unknown dependencies: {', '.join(invalid_deps)}")
+                warning = f"Unknown dependencies: {', '.join(sorted(invalid_deps))}"
+                if suggested_deps:
+                    suggestions = ', '.join(f"{k}->{v}" for k, v in suggested_deps.items())
+                    warning += f" (suggestions: {suggestions})"
+                warnings.append(warning)
 
             # Generate build metadata
-            self._generate_build_metadata(project_build_dir, project_config,
-                                        build_config, valid_deps, invalid_deps)
+            self._generate_build_metadata(
+                project_build_dir,
+                project_config,
+                build_config,
+                valid_deps,
+                invalid_deps,
+                suggested_deps,
+            )
 
             # Calculate total size
             total_size = self._calculate_directory_size(project_build_dir)
@@ -508,9 +522,15 @@ class BuildSystem:
 
         return total_savings
 
-    def _generate_build_metadata(self, build_dir: Path, project_config: ProjectConfig,
-                                build_config: BuildConfig, valid_deps: Set[str],
-                                invalid_deps: Set[str]):
+    def _generate_build_metadata(
+            self,
+            build_dir: Path,
+            project_config: ProjectConfig,
+            build_config: BuildConfig,
+            valid_deps: Set[str],
+            invalid_deps: Set[str],
+            suggested_deps: Dict[str, str],
+    ):
         """Generate build metadata file."""
 
         metadata = {
@@ -535,7 +555,8 @@ class BuildSystem:
             "dependencies": {
                 "valid": list(valid_deps),
                 "invalid": list(invalid_deps),
-                "total": len(valid_deps) + len(invalid_deps)
+                "suggested": suggested_deps,
+                "total": len(valid_deps) + len(invalid_deps),
             },
             "files": self._get_file_list(build_dir)
         }

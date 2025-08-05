@@ -34,7 +34,7 @@ FORBIDDEN_IMPORTS = {
 # real estate, so we keep this conservative.
 MAX_LINE_LENGTH = 88
 
-def _analyze_file(path: Path) -> List[str]:
+def _analyze_file(path: Path) -> list[str] | None:
     """Analyze a single Python file and return a list of warnings.
 
     Parameters
@@ -80,6 +80,8 @@ def _analyze_file(path: Path) -> List[str]:
                     )
 
         return warnings
+    return None
+
 
 def analyze_project(path: Path) -> List[str]:
     """Analyze all Python files under ``path`` for MicroPython compatibility.
