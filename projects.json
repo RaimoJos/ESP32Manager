@@ -1,6 +1,39 @@
 {
-  "projects": {},
-  "current_project": null,
-  "last_updated": "2025-08-05T04:43:15.436495",
+  "projects": {
+    "test": {
+      "name": "test",
+      "path": "C:\\Users\\rjost\\dev\\ESP32Manager\\test",
+      "description": "test project",
+      "target_device": "esp32",
+      "main_file": "main.py",
+      "template": "basic",
+      "version": "1.0.0",
+      "author": "User",
+      "dependencies": [],
+      "build_config": {
+        "strip_type_hints": true,
+        "optimize": true,
+        "include_tests": false
+      },
+      "deploy_config": {
+        "device": ":",
+        "max_retries": 3,
+        "backup_before_deploy": true,
+        "verify_after_deploy": true
+      },
+      "hardware_config": {
+        "board": "esp32",
+        "flash_size": "4MB",
+        "frequency": "240MHz"
+      },
+      "tags": [],
+      "created_at": "2025-08-05T11:22:14.306314",
+      "last_modified": "",
+      "last_deployed": "",
+      "git_repo": null
+    }
+  },
+  "current_project": "test",
+  "last_updated": "2025-08-05T11:22:14.350811",
   "version": "2.0"
 }

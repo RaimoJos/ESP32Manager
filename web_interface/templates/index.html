@@ -2,86 +2,106 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ESP32 Manager Dashboard</title>
-    <link rel="stylesheet" href="/static/css/styles.css"></head>
+    <link rel="stylesheet" href="/static/css/styles.css">
 <body>
     <header>
         <h1>ESP32 Manager Dashboard</h1>
     </header>
-    <nav class="tabs">
+    <nav class="tabs" role="tablist" aria-label="Dashboard Sections">
         <button class="tab-button active" data-tab="project">Projects</button>
         <button class="tab-button" data-tab="device">Devices</button>
         <button class="tab-button" data-tab="logs">Logs</button>
     </nav>
-    <section id="project-section" class="tab-content active">
-        <h2>Projects</h2>
-        <form id="create-project-form">
-            <input type="text" id="project-name" placeholder="Project Name" required>
-            <input type="text" id="project-desc" placeholder="Description">
-            <select id="project-template">
-                <option value="basic">Basic</option>
-                <option value="iot">IoT</option>
-            </select>
-            <button type="submit">Create Project</button>
-            <input type="text" id="project-search" placeholder="Search projects">
+    <div class="container">
+        <section id="project-section" class="tab-content active">
+            <h2>Projects</h2>
+           <form id="create-project-form" aria-label="Create new project">
+               <label>
+                   Name:
+                   <input type="text" id="project-name" placeholder="Project Name">
+               </label>
+               <label>
+                   Description:
+                   <input type="text" id="project-desc" placeholder="Description">
+               </label>
+               <label>
+                   Template:
+                   <select id="project-template">
+                       <option value="basic">Basic</option>
+                       <option value="iot">IoT</option>
+                   </select>
+               </label>
+               <button type="submit">Create</button>
+           </form>
 
-        </form>
-        <table id="projects-table">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Template</th>
-                    <th>Description</th>
-                    <th>Last Build</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Filled by scripts.js -->
-            </tbody>
-        </table>
+            <!-- Filter separate from creation form for clarity -->
+            <div class="search-container">
+                <label for="project-search">Search Projects:</label>
+                <input type="text" id="project-search" placeholder="Filter by name or description">
+            </div>
 
-    </section>
-    <section id="device-section" class="tab-content">
-        <h2>Devices</h2>
-        <table id="devices-table">
-            <thead>
-                <tr>
-                    <th>Port</th>
-                    <th>Name</th>
-                    <th>State</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Filled by script.js -->
-            </tbody>
-        </table>
-    </section>
-    <section id="logs-section" class="tab-content">
-        <h2>Logs</h2>
-        <pre id="logs"></pre>
-    </section>
+            <table id="projects-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Template</th>
+                        <th>Description</th>
+                        <th>Last Build</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Filled by scripts.js -->
+                </tbody>
+            </table>
 
-    <!-- Project Details Modal -->
-    <div id="project-modal" class="modal hidden">
-      <div class="modal-content">
-        <span id="modal-close" class="modal-close">&times;</span>
-        <h3 id="modal-title"></h3>
-        <div id="modal-body">
-          <!-- Filled by JS -->
-          <p><strong>Description:</strong> <span id="modal-desc"></span></p>
-          <p><strong>Files:</strong> <span id="modal-files"></span></p>
-          <p><strong>Python files:</strong> <span id="modal-pyfiles"></span></p>
-          <p><strong>Size:</strong> <span id="modal-size"></span> bytes</p>
-          <p><strong>Last built:</strong> <span id="modal-last-built"></span></p>
-          <p><strong>Last errors:</strong> <pre id="modal-errors"></pre></p>
-          <p><strong>Last warnings:</strong> <pre id="modal-warnings"></pre></p>
+        </section>
+        <section id="device-section" class="tab-content">
+            <h2>Devices</h2>
+            <div class="device-actions">
+                <button onclick="manager.scanDevices()">🔍 Scan for Devices</button>
+            </div>
+            <table id="devices-table" aria-label="Connected Devices">
+                <thead>
+                    <tr>
+                        <th>Port</th>
+                        <th>Name</th>
+                        <th>State</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Filled by script.js -->
+                </tbody>
+            </table>
+        </section>
+        <section id="logs-section" class="tab-content">
+            <h2>Logs</h2>
+            <pre id="logs"></pre>
+        </section>
+
+        <!-- Project Details Modal -->
+        <div id="project-modal" class="modal hidden">
+          <div class="modal-content">
+            <span id="modal-close" class="modal-close">&times;</span>
+            <h3 id="modal-title"></h3>
+            <div id="modal-body">
+              <!-- Filled by JS -->
+              <p><strong>Description:</strong> <span id="modal-desc"></span></p>
+              <p><strong>Files:</strong> <span id="modal-files"></span></p>
+              <p><strong>Python files:</strong> <span id="modal-pyfiles"></span></p>
+              <p><strong>Size:</strong> <span id="modal-size"></span> bytes</p>
+              <p><strong>Last built:</strong> <span id="modal-last-built"></span></p>
+              <p><strong>Last errors:</strong> <pre id="modal-errors"></pre></p>
+              <p><strong>Last warnings:</strong> <pre id="modal-warnings"></pre></p>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
 
-    <script src="static/js/script.js"></script>
+    </div>
+    <script src="/static/js/script.js"></script>
 
 </body>
 </html>
