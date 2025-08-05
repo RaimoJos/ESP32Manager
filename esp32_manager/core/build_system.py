@@ -21,19 +21,6 @@ from esp32_manager.utils.exceptions import ProjectValidationError
 
 logger = logging.getLogger(__name__)
 
-def _is_string_node(self, node):
-    """Check if node is a string literal (compatible with all Python versions)."""
-    if hasattr(ast, 'Constant'):  # Python 3.8+
-        return isinstance(node, ast.Constant) and isinstance(node.value, str)
-    else:  # Python < 3.8
-        return isinstance(node, ast.Constant)
-
-def visit_FunctionDef(self, node):
-    if (node.body and isinstance(node.body[0], ast.Expr) and
-        self._is_string_node(node.body[0].value)):
-        node.body = node.body[1:]
-    return self.generic_visit(node)
-
 
 @dataclass
 class BuildResult:
@@ -62,29 +49,6 @@ class BuildConfig:
     output_format: str = "directory"  # directory, zip, tar
     mpy_cross_path: str = "mpy-cross"
     mpy_cross_flags: List[str] = field(default_factory=list)
-
-
-
-def _get_cache_key(self, project_config: ProjectConfig, build_config: BuildConfig) -> str:
-    """Generate cache key for build."""
-    import hashlib
-
-    # Include project files modification times
-    file_times = []
-    src_dir = project_config.path / "src"
-    if src_dir.exists():
-        for file_path in src_dir.rglob("*.py"):
-            file_times.append(str(file_path.stat().st_mtime))
-
-    cache_data = {
-        'project_name': project_config.name,
-        'project_version': project_config.version,
-        'build_config': build_config.__dict__,
-        'file_times': sorted(file_times)
-    }
-
-    cache_str = json.dumps(cache_data, sort_keys=True)
-    return hashlib.md5(cache_str.encode()).hexdigest()
 
 class DependencyResolver:
     """Resolves and manages project dependencies."""
@@ -117,7 +81,8 @@ class DependencyResolver:
 
         return dependencies
 
-    def _extract_imports(self, file_path: Path) -> Set[str]:
+    @staticmethod
+    def _extract_imports(file_path: Path) -> Set[str]:
         """Extract import statements from a Python file."""
         imports = set()
 
@@ -158,7 +123,8 @@ class DependencyResolver:
 
         return valid_deps, invalid_deps, suggested_deps
 
-    def _suggest_alternatives(self, invalid_deps: Set[str]) -> Dict[str, str]:
+    @staticmethod
+    def _suggest_alternatives(invalid_deps: Set[str]) -> Dict[str, str]:
         """Suggest alternative for invalid dependencies."""
         suggestions = {
             'collections': 'ucollections',
@@ -274,32 +240,37 @@ class CodeOptimizer:
         """Remove docstrings from AST."""
         class DocstringRemover(ast.NodeTransformer):
             def visit_FunctionDef(self, node):
-                if (node.body and isinstance(node.body[0], ast.Expr) and
-                    isinstance(node.body[0].value, ast.Constant)):
-                    node.body = node.body[1:]
+                if node.body and isinstance(node.body[0], ast.Expr):
+                    first_expr = node.body[0]
+                    if isinstance(first_expr.value, ast.Constant):
+                        node.body = node.body[1:]
                 return self.generic_visit(node)
 
             def visit_ClassDef(self, node):
-                if (node.body and isinstance(node.body[0], ast.Expr) and
-                    isinstance(node.body[0].value, ast.Constant)):
-                    node.body = node.body[1:]
+                if node.body and isinstance(node.body[0], ast.Expr):
+                    first_expr = node.body[0]
+                    if isinstance(first_expr.value, ast.Constant):
+                        node.body = node.body[1:]
                 return self.generic_visit(node)
 
             def visit_Module(self, node):
-                if (node.body and isinstance(node.body[0], ast.Expr) and
-                    isinstance(node.body[0].value, ast.Constant)):
-                    node.body = node.body[1:]
+                if node.body and isinstance(node.body[0], ast.Expr):
+                    first_expr = node.body[0]
+                    if isinstance(first_expr.value, ast.Constant):
+                        node.body = node.body[1:]
                 return self.generic_visit(node)
 
         return DocstringRemover().visit(tree)
 
-    def _optimize_imports(self, tree: ast.AST) -> ast.AST:
+    @staticmethod
+    def _optimize_imports(tree: ast.AST) -> ast.AST:
         """Optimize import statements."""
         # This is a placeholder for import optimization
         # Could include: removing unused imports, combining imports, etc.
         return tree
 
-    def _strip_comments(self, content: str) -> str:
+    @staticmethod
+    def _strip_comments(content: str) -> str:
         """Remove comments from code."""
         lines = content.split('\n')
         stripped_lines = []
@@ -332,7 +303,8 @@ class CodeOptimizer:
 
         return '\n'.join(stripped_lines)
 
-    def _minify_code(self, content: str) -> str:
+    @staticmethod
+    def _minify_code(content: str) -> str:
         """Basic code minification."""
         lines = content.split('\n')
         minified_lines = []
@@ -484,7 +456,8 @@ class BuildSystem:
                 build_time=time.time() - start_time
             )
 
-    def _validate_project(self, project_config: ProjectConfig):
+    @staticmethod
+    def _validate_project(project_config: ProjectConfig):
         """Validate project before building."""
         if not project_config.path.exists():
             raise ProjectValidationError(f"Project path does not exist: {project_config.path}")
@@ -497,7 +470,8 @@ class BuildSystem:
         if not main_file.exists():
             raise ProjectValidationError(f"Main file not found: {main_file}")
 
-    def _process_source_directory(self, src_dir: Path, target_dir: Path,
+    @staticmethod
+    def _process_source_directory(src_dir: Path, target_dir: Path,
                                  build_config: BuildConfig) -> int:
         """Process source directory with optimizations."""
         optimizer = CodeOptimizer(build_config)
@@ -565,7 +539,8 @@ class BuildSystem:
         with open(metadata_file, 'w', encoding='utf-8') as f:
             json.dump(metadata, f, indent=2)
 
-    def _get_file_list(self, directory: Path) -> List[Dict[str, Any]]:
+    @staticmethod
+    def _get_file_list(directory: Path) -> List[Dict[str, Any]]:
         """Get list of files with metadata."""
         files = []
 
@@ -583,7 +558,8 @@ class BuildSystem:
 
         return files
 
-    def _calculate_directory_size(self, directory: Path) -> int:
+    @staticmethod
+    def _calculate_directory_size(directory: Path) -> int:
         """Calculate total size of directory."""
         total_size = 0
 
@@ -593,7 +569,8 @@ class BuildSystem:
 
         return total_size
 
-    def _cross_compile_project(self, build_dir: Path, build_config: BuildConfig):
+    @staticmethod
+    def _cross_compile_project(build_dir: Path, build_config: BuildConfig):
         """Cross-compile Python files using mpy-cross if available."""
         logger.info("Cross-compiling to bytecode...")
 
@@ -615,7 +592,8 @@ class BuildSystem:
                 logger.warning(f"Failed to cross-compile {py_file}: {e}. Copying source file.")
                 shutil.copy2(py_file, mpy_file)
 
-    def _package_build(self, build_dir: Path, build_config: BuildConfig):
+    @staticmethod
+    def _package_build(build_dir: Path, build_config: BuildConfig):
         """Package build output."""
         if build_config.output_format == "zip":
             archive_path = build_dir.with_suffix('.zip')
@@ -762,24 +740,26 @@ def create_default_build_configs() -> Dict[str, BuildConfig]:
     }
 
 
-def validate_build_config(self, config: BuildConfig) -> List[str]:
+def validate_build_config(build_config: BuildConfig) -> List[str]:
     """Validate build configuration."""
     warnings = []
 
     # Check mpy-cross availability
-    if config.cross_compile:
+    if build_config.cross_compile:
         try:
-            result = subprocess.run([config.mpy_cross_path, '--version'],
+            result = subprocess.run([build_config.mpy_cross_path, '--version'],
                                     capture_output=True, text=True, timeout=5)
             if result.returncode != 0:
-                warnings.append(f"mpy-cross not available at {config.mpy_cross_path}")
+                warnings.append(
+                    f"mpy-cross not available at {build_config.mpy_cross_path}"
+                )
         except (subprocess.TimeoutExpired, FileNotFoundError):
             warnings.append("mpy-cross not found, cross-compilation will be skipped")
 
     # Validate target platform
     valid_platforms = {'esp32', 'esp8266', 'rp2040'}
-    if config.target_platform not in valid_platforms:
-        warnings.append(f"Unknown target platform: {config.target_platform}")
+    if build_config.target_platform not in valid_platforms:
+        warnings.append(f"Unknown target platform: {build_config.target_platform}")
 
     return warnings
 
@@ -791,14 +771,14 @@ if __name__ == "__main__":
     # Create example project config
     from esp32_manager.core.config_manager import ProjectConfig
 
-    config = ProjectConfig(
+    project_config = ProjectConfig(
         name="example_project",
         path=Path("example_project"),
         description="Example project for testing"
     )
 
     # Build project
-    result = build_system.build_project(config)
+    result = build_system.build_project(project_config)
     print(f"Build successful: {result.success}")
     print(f"Files processed: {result.files_processed}")
     print(f"Build time: {result.build_time:.2f}s")

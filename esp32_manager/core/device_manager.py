@@ -1,3 +1,4 @@
+# noinspection SqlNoDataSource
 """
 ESP32 Device Manager
 ===================
@@ -6,7 +7,6 @@ Manages ESP32 device connections, firmware, file transfers, and communication.
 Handles multiple devices, automatic detection, and deployment operations.
 """
 
-import os
 import sys
 import time
 import serial
@@ -19,7 +19,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 import logging
 import json
-import hashlib
 
 from ..utils.serial_monitor import SerialMonitor
 
@@ -357,15 +356,15 @@ class DeviceDetector:
 
     def detect_devices(self) -> List[DeviceInfo]:
         """Detect ESP32 devices."""
-        devices = []
+        detected_devices: List[DeviceInfo] = []
         ports = serial.tools.list_ports.comports()
 
-        for port in ports:
-            if self._is_esp32_device(port):
-                device_info = self._create_device_info(port)
-                devices.append(device_info)
+        for serial_port in ports:
+            if self._is_esp32_device(serial_port):
+                device_info = self._create_device_info(serial_port)
+                detected_devices.append(device_info)
 
-        return devices
+        return detected_devices
 
     def _is_esp32_device(self, port) -> bool:
         """Check if port is likely an ESP32 device."""
@@ -380,13 +379,14 @@ class DeviceDetector:
             return True
 
         # Check device name (Linux/macOS)
-        device = port.device.lower()
-        if any(keyword in device for keyword in ['usb', 'tty', 'com']):
+        device_info = port.device.lower()
+        if any(keyword in device_info for keyword in ['usb', 'tty', 'com']):
             return True
 
         return False
 
-    def _create_device_info(self, port) -> DeviceInfo:
+    @staticmethod
+    def _create_device_info(port) -> DeviceInfo:
         """Create DeviceInfo from serial port."""
         device_info = DeviceInfo(
             port=port.device,
@@ -434,11 +434,11 @@ class ESP32DeviceManager:
         """Add device change observer."""
         self._observers.append(callback)
 
-    def _notify_observers(self, event: str, device: DeviceInfo):
+    def _notify_observers(self, event: str, device_info: DeviceInfo):
         """Notify observers of device changes."""
         for callback in self._observers:
             try:
-                callback(event, device)
+                callback(event, device_info)
             except Exception as e:
                 logger.warning(f"Observer callback failed: {e}")
 
@@ -480,14 +480,14 @@ class ESP32DeviceManager:
         previous_ports = set(self.devices.keys())
 
         # Check for new devices
-        for device in detected_devices:
-            if device.port not in self.devices:
-                self.devices[device.port] = device
-                self._notify_observers('device_connected', device)
-                logger.info(f"Device connected: {device.port}")
+        for new_dev in detected_devices:
+            if new_dev.port not in self.devices:
+                self.devices[new_dev.port] = new_dev
+                self._notify_observers('device_connected', new_dev)
+                logger.info(f"Device connected: {new_dev.port}")
             else:
                 # Update existing device info
-                self.devices[device.port] = device
+                self.devices[new_dev.port] = new_dev
 
         # Check for disconnected devices
         for port in previous_ports - current_ports:
@@ -900,18 +900,18 @@ def get_device_info_quick(port: str) -> Optional[Dict[str, str]]:
         if connection.connect():
             repl = MicroPythonREPL(connection)
             if repl.enter_repl():
-                info = {}
+                quick_info: Dict[str, str] = {}
 
                 success, response = repl.execute_command("import sys; sys.platform")
                 if success:
-                    info['platform'] = response.strip()
+                    quick_info['platform'] = response.strip()
 
                 success, response = repl.execute_command("import machine; machine.unique_id().hex()")
                 if success:
                     info['unique_id'] = response.strip()
 
                 connection.disconnect()
-                return info
+                return quick_info
 
         connection.disconnect()
     except Exception as e:
